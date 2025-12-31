@@ -1,3 +1,5 @@
+This is a repo, which leverage AI Hedge Fund to do analysis and trading decisions, and based on the decisions do auto trading through Alpaca API. Trading user guide will be introduced at the end of this readme
+
 # AI Hedge Fund
 
 This is a proof of concept for an AI-powered hedge fund.  The goal of this project is to explore the use of AI to make trading decisions.  This project is for **educational** purposes only and is not intended for real trading or investment.
