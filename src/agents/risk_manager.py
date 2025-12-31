@@ -277,20 +277,24 @@ def calculate_volatility_adjusted_limit(annualized_volatility: float) -> float:
     - High volatility (>30%): 10-15% allocation
     - Very high volatility (>50%): Max 10% allocation
     """
-    base_limit = 0.20  # 20% baseline
+    #base_limit = 0.20  # 20% baseline
+    # 将基准从 0.20 提升到 0.35 (允许单仓起始上限更高)
+    base_limit = 0.35
     
-    if annualized_volatility < 0.15:  # Low volatility
+    #if annualized_volatility < 0.15:  # Low volatility
+    if annualized_volatility < 0.20: # 放宽低波定义
         # Allow higher allocation for stable stocks
         vol_multiplier = 1.25  # Up to 25%
-    elif annualized_volatility < 0.30:  # Medium volatility  
+    #elif annualized_volatility < 0.30:  # Medium volatility  
+    elif annualized_volatility < 0.40: # 科技股常态区间
         # Standard allocation with slight adjustment based on volatility
-        vol_multiplier = 1.0 - (annualized_volatility - 0.15) * 0.5  # 20% -> 12.5%
-    elif annualized_volatility < 0.50:  # High volatility
+        vol_multiplier = 1.0 #- (annualized_volatility - 0.15) * 0.5  # 20% -> 12.5%
+    #elif annualized_volatility < 0.50:  # High volatility
         # Reduce allocation significantly
-        vol_multiplier = 0.75 - (annualized_volatility - 0.30) * 0.5  # 15% -> 5%
+    #    vol_multiplier = 0.75 - (annualized_volatility - 0.30) * 0.5  # 15% -> 5%
     else:  # Very high volatility (>50%)
         # Minimum allocation for very risky stocks
-        vol_multiplier = 0.50  # Max 10%
+        vol_multiplier = 0.7  # Max 10%
     
     # Apply bounds to ensure reasonable limits
     vol_multiplier = max(0.25, min(1.25, vol_multiplier))  # 5% to 25% range

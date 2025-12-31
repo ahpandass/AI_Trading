@@ -4,7 +4,7 @@ from langchain_core.messages import HumanMessage
 
 from src.graph.state import AgentState, show_agent_reasoning
 from src.utils.api_key import get_api_key_from_state
-import json
+import json, time
 import pandas as pd
 import numpy as np
 
@@ -51,7 +51,7 @@ def technical_analyst_agent(state: AgentState, agent_id: str = "technical_analys
 
     for ticker in tickers:
         progress.update_status(agent_id, ticker, "Analyzing price data")
-
+        time.sleep(1) # for reduce the request speed.
         # Get the historical price data
         prices = get_prices(
             ticker=ticker,

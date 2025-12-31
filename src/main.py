@@ -15,6 +15,8 @@ from src.utils.visualize import save_graph_as_png
 from src.cli.input import (
     parse_cli_inputs,
 )
+from src.execution.alpaca_trader import AlpacaTrader
+from src.utils.trading_logger import TradingLogger
 
 import argparse
 from datetime import datetime
@@ -41,6 +43,47 @@ def parse_hedge_fund_response(response):
         print(f"Unexpected error while parsing response: {e}\nResponse: {repr(response)}")
         return None
 
+def align_portfolio(live_data, tickers, margin_requirement=0.0):
+    """将 Alpaca 的数据对齐为 Agent 期望的完整格式"""
+    #
+    # 基础结构
+    full_portfolio = {
+        "cash": live_data["cash"],
+        "margin_requirement": margin_requirement,
+        "margin_used": 0.0, # 模拟盘初期通常设为0
+        "positions": {},
+        "realized_gains": {ticker: {"long": 0.0, "short": 0.0} for ticker in tickers}
+    }
+#
+    # 填充 positions
+    for ticker in tickers:
+        # 如果 Alpaca 真实持仓里有这只票
+        if ticker in live_data["positions"]:
+            pos = live_data["positions"][ticker]
+            full_portfolio["positions"][ticker] = {
+                "long": pos["long"],
+                "short": pos["short"],
+                "long_cost_basis": 0.0, # 实时交易中通常由交易所跟踪，初次对接可设为0
+                "short_cost_basis": 0.0,
+                "short_margin_used": 0.0,
+            }
+        else:
+            # 如果没持仓，填充默认空值
+            full_portfolio["positions"][ticker] = {
+                "long": 0,
+                "short": 0,
+                "long_cost_basis": 0.0,
+                "short_cost_basis": 0.0,
+                "short_margin_used": 0.0,
+            }
+    #
+    # 3. 填充 realized_gains (启动时设为 0.0)
+            full_portfolio["realized_gains"][ticker] = {
+                "long": 0.0,
+                "short": 0.0
+            }
+       #     
+    return full_portfolio
 
 ##### Run the Hedge Fund #####
 def run_hedge_fund(
@@ -83,10 +126,28 @@ def run_hedge_fund(
             },
         )
 
-        return {
+        output_result = {
             "decisions": parse_hedge_fund_response(final_state["messages"][-1].content),
             "analyst_signals": final_state["data"]["analyst_signals"],
         }
+
+        # === 改进：将保存逻辑移至此处，确保必然触发 ===
+        try:
+            with open("decision_results.txt", "a", encoding="utf-8") as f:
+                import datetime
+                f.write(f"\n{'='*50}\n")
+                f.write(f"Run at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Tickers: {tickers} | {start_date} to {end_date}\n")
+                f.write(f"{'='*50}\n")
+                # 使用 json.dumps 替代 str()，这样保存的内容是可读的 JSON 格式
+                f.write(json.dumps(output_result, indent=2, ensure_ascii=False))
+                f.write("\n\n")
+            # 注意：在 Agent 运行期间，print 可能被 progress bar 覆盖
+            # 建议使用 print 或 logging 记录成功
+        except Exception as file_err:
+            print(f"Failed to save results to file: {file_err}")
+
+        return output_result
     finally:
         # Stop progress tracking
         progress.stop()
@@ -130,7 +191,7 @@ def create_workflow(selected_analysts=None):
     return workflow
 
 
-if __name__ == "__main__":
+def main():
     inputs = parse_cli_inputs(
         description="Run the hedge fund trading system",
         require_tickers=True,
@@ -142,29 +203,17 @@ if __name__ == "__main__":
     tickers = inputs.tickers
     selected_analysts = inputs.selected_analysts
 
-    # Construct portfolio here
-    portfolio = {
-        "cash": inputs.initial_cash,
-        "margin_requirement": inputs.margin_requirement,
-        "margin_used": 0.0,
-        "positions": {
-            ticker: {
-                "long": 0,
-                "short": 0,
-                "long_cost_basis": 0.0,
-                "short_cost_basis": 0.0,
-                "short_margin_used": 0.0,
-            }
-            for ticker in tickers
-        },
-        "realized_gains": {
-            ticker: {
-                "long": 0.0,
-                "short": 0.0,
-            }
-            for ticker in tickers
-        },
-    }
+    # 1. 初始化你封装的 Trader
+    trader = AlpacaTrader()
+    clock = trader.client.get_clock()
+    if not clock.is_open:
+        print(f"休市中。下次开盘时间: {clock.next_open}")
+        #return  
+    
+    # 2. 获取实时持仓覆盖配置
+    raw_live_data = trader.get_live_portfolio()
+
+    portfolio = align_portfolio(raw_live_data, tickers, inputs.margin_requirement)
 
     result = run_hedge_fund(
         tickers=tickers,
@@ -176,4 +225,29 @@ if __name__ == "__main__":
         model_name=inputs.model_name,
         model_provider=inputs.model_provider,
     )
+    
     print_trading_output(result)
+    #print(result)
+
+    # 实例化 logger
+    t_logger = TradingLogger()
+    t_logger.log_trade_table(result)
+
+    decisions = result.get('decisions', {})
+    if not decisions:
+        print(f"{Fore.YELLOW}No decisions generated by the AI.{Style.RESET_ALL}")
+        return 
+    # 最后的确认步骤：如果是生产环境定时跑，建议加上 try-except 保护
+    try:
+        print(f"\n{Fore.CYAN}--- 准备进入执行阶段 ---{Style.RESET_ALL}")
+        #trader.execute_decisions(decisions)
+        print(f"{Fore.GREEN}✅ 定时交易任务执行完毕。{Style.RESET_ALL}")
+    except Exception as e:
+        print(f"{Fore.RED}❌ 执行阶段发生严重错误: {e}{Style.RESET_ALL}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print(f"🔥 程序发生未捕获异常: {e}")
+        sys.exit(1)

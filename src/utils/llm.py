@@ -1,6 +1,6 @@
 """Helper functions for LLM"""
 
-import json
+import json, re
 from pydantic import BaseModel
 from src.llm.models import get_model, get_model_info
 from src.utils.progress import progress
@@ -108,16 +108,41 @@ def create_default_response(model_class: type[BaseModel]) -> BaseModel:
 
 def extract_json_from_response(content: str) -> dict | None:
     """Extracts JSON from markdown-formatted response."""
+    """针对 R1 优化的 JSON 提取逻辑"""
     try:
-        json_start = content.find("```json")
-        if json_start != -1:
-            json_text = content[json_start + 7 :]  # Skip past ```json
-            json_end = json_text.find("```")
-            if json_end != -1:
-                json_text = json_text[:json_end].strip()
-                return json.loads(json_text)
+        # 1. 预处理：去除前后空白
+        content = content.strip()
+
+        # 2. 尝试寻找最后一个 ```json ... ``` 块
+        # R1 的结果通常在最后一个代码块里
+        json_blocks = re.findall(r"```json\s*(.*?)\s*```", content, re.DOTALL)
+        if json_blocks:
+            # 尝试解析最后一个代码块
+            try:
+                return json.loads(json_blocks[-1].strip())
+            except:
+                pass
+
+        # 3. 核心修复：从后往前定位最后一个完整的 { ... }
+        # 错误 "Extra data" 往往是因为我们从前往后找，找早了。
+        last_brace_index = content.rfind('}')
+        if last_brace_index != -1:
+            # 从最后一个 } 开始往前找对应的 {
+            # 这里我们采用一种“贪婪但安全”的策略
+            # 找到最后一个 { 
+            first_brace_index = content.rfind('{', 0, last_brace_index)
+            if first_brace_index != -1:
+                potential_json = content[first_brace_index : last_brace_index + 1]
+                try:
+                    return json.loads(potential_json)
+                except:
+                    # 如果中间还有干扰，尝试找最前面一个 { 到最后一个 }
+                    all_json_match = re.search(r"(\{.*\})", content, re.DOTALL)
+                    if all_json_match:
+                        return json.loads(all_json_match.group(1).strip())
+            
     except Exception as e:
-        print(f"Error extracting JSON from response: {e}")
+        print(f"Error extracting JSON from R1 massive output: {e}")
     return None
 
 
@@ -128,6 +153,12 @@ def get_agent_model_config(state, agent_name):
     Always returns valid model_name and model_provider values.
     """
     request = state.get("metadata", {}).get("request")
+
+    # 策略：硬路由逻辑
+    # 只有决策者使用 deepseek-reasoner (R1)
+    #if agent_name == "portfolio_manager":
+        #return "deepseek-reasoner", "DeepSeek"
+    #    return "deepseek-chat", "DeepSeek"
     
     if request and hasattr(request, 'get_agent_model_config'):
         # Get agent-specific model configuration

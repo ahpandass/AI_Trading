@@ -1,0 +1,10 @@
+{
+    "MSFT": {
+        "extreme_price": 488.81,
+        "side": "LONG"
+    },
+    "NVDA": {
+        "extreme_price": 187.23,
+        "side": "LONG"
+    }
+}

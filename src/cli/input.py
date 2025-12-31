@@ -1,4 +1,4 @@
-import sys
+import sys,os
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import argparse
@@ -77,6 +77,11 @@ def select_analysts(flags: dict | None = None) -> list[str]:
     if flags and flags.get("analysts"):
         return [a.strip() for a in flags["analysts"].split(",") if a.strip()]
 
+    # Check for ANALYSTS environment variable
+    env_analysts = os.getenv("ANALYSTS")
+    if env_analysts:
+        return [a.strip() for a in env_analysts.split(",") if a.strip()]
+
     choices = questionary.checkbox(
         "Select your AI analysts.",
         choices=[questionary.Choice(display, value=value) for display, value in ANALYST_ORDER],
@@ -106,15 +111,18 @@ def select_model(use_ollama: bool, model_flag: str | None = None) -> tuple[str, 
     model_name: str = ""
     model_provider: str | None = None
 
-    if model_flag:
-        model = find_model_by_name(model_flag)
+    # Priority: 1. CLI flag, 2. Environment variable, 3. Interactive selection
+    effective_model = model_flag or os.getenv("MODEL")
+
+    if effective_model:
+        model = find_model_by_name(effective_model)
         if model:
             print(
-                f"\nUsing specified model: {Fore.CYAN}{model.provider.value}{Style.RESET_ALL} - {Fore.GREEN + Style.BRIGHT}{model.model_name}{Style.RESET_ALL}\n"
+                f"\nUsing model: {Fore.CYAN}{model.provider.value}{Style.RESET_ALL} - {Fore.GREEN + Style.BRIGHT}{model.model_name}{Style.RESET_ALL}\n"
             )
             return model.model_name, model.provider.value
         else:
-            print(f"{Fore.RED}Model '{model_flag}' not found. Please select a model.{Style.RESET_ALL}")
+            print(f"{Fore.RED}Model '{effective_model}' not found. Please select a model.{Style.RESET_ALL}")
 
     if use_ollama:
         print(f"{Fore.CYAN}Using Ollama for local LLM inference.{Style.RESET_ALL}")
@@ -284,5 +292,3 @@ def parse_cli_inputs(
         show_agent_graph=getattr(args, "show_agent_graph", False),
         raw_args=args,
     )
-
-

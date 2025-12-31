@@ -156,3 +156,35 @@ If you have a feature request, please open an [issue](https://github.com/virattt
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Shan added auto trading feature:
+
+Apply alpaca api key and secret.
+Add into .env file created before as below details:
+
+```bash
+# For getting account info and paper trading through Alpaca
+ALPACA_API_KEY=your api key
+ALPACA_SECRET_KEY=your secret
+ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2
+```
+
+also in order to schedule run, you could add your agents and model name in the same .env file as belwo:
+```bash
+# Configuration for fixed agent selection and LLM model selection
+# ANALYSTS is a comma-separated list of analyst keys (e.g., technical_analyst,fundamentals_analyst)
+ANALYSTS=cathie_wood,phil_fisher,stanley_druckenmiller,warren_buffett,technical_analyst,growth_analyst,news_sentiment_analyst,sentiment_analyst
+
+# MODEL is the model name (e.g., gpt-4o, claude-3-5-sonnet-20241022)
+MODEL=deepseek-chat
+```
+
+You could create schedule job in Task Scheduler and run everyday 10:05am UTC for trading (once a day):
+```bash
+poetry run python src/main.py
+```
+and create another job and run every 5 mins for risk manager.
+The risk manager will run and pick the live ticker price and cover/sell if loss of tailing 5%
+```bash
+poetry run python src/risk_manager.py
+```
