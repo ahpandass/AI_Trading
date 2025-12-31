@@ -208,7 +208,7 @@ def main():
     clock = trader.client.get_clock()
     if not clock.is_open:
         print(f"休市中。下次开盘时间: {clock.next_open}")
-        #return  
+        return  
     
     # 2. 获取实时持仓覆盖配置
     raw_live_data = trader.get_live_portfolio()
@@ -240,7 +240,7 @@ def main():
     # 最后的确认步骤：如果是生产环境定时跑，建议加上 try-except 保护
     try:
         print(f"\n{Fore.CYAN}--- 准备进入执行阶段 ---{Style.RESET_ALL}")
-        #trader.execute_decisions(decisions)
+        trader.execute_decisions(decisions)
         print(f"{Fore.GREEN}✅ 定时交易任务执行完毕。{Style.RESET_ALL}")
     except Exception as e:
         print(f"{Fore.RED}❌ 执行阶段发生严重错误: {e}{Style.RESET_ALL}")
