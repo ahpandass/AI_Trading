@@ -44,8 +44,10 @@ class Cache:
     def _save_to_disk(self):
         """数据更新时同步写入硬盘"""
         try:
+            import copy
+            data_to_save = copy.deepcopy(self._data)
             with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(self._data, f, indent=4, ensure_ascii=False)
+                json.dump(data_to_save, f, indent=4, ensure_ascii=False)
         except Exception as e:
             print(f"❌ 缓存保存失败: {e}")
 
